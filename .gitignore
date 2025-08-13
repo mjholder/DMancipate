@@ -1,0 +1,67 @@
+# ─── Python ─────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+*.log
+
+# Bytecode cache
+*.pyc
+
+# Distribution / packaging
+build/
+dist/
+.eggs/
+*.whl
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.pytest_cache/
+
+# Environment variables
+.env
+.env.*
+*.env
+
+# mypy, ruff, pylint, etc.
+.mypy_cache/
+.dmypy.json
+.pytype/
+.ruff_cache/
+pylint-report.txt
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.python-version
+
+# Flask-specific
+instance/
+*.db
+*.sqlite3
+
+# Local development
+*.swp
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db

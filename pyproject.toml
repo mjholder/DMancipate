@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "DMancipate"
+version = "0.0.1"
+description = "HCM AI Sample App"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text= "MIT License" }
+authors = [
+    { name = "Juan Manuel Barea Martinez", email = "jbarea@redhat.com" },
+]
+dependencies = [
+  "flask",
+  "flask-restful",
+  "flask-cors",
+  "openai",
+  "langchain-core",
+  "langchain-openai",
+  "langchain-ollama",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ipython",
+  "pytest",
+  "ruff",
+  "pre-commit",
+  "python-dotenv",
+  "flake8"
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.ruff]
+line-length = 100
+indent-width = 4

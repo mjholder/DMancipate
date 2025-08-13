@@ -1,0 +1,7 @@
+apps:
+- name: "DMancipate"
+  components:
+    - name: "DMancipate"
+      host: github
+      repo: "JuanmaBM/DMancipate"
+      path: templates/service-template.yaml

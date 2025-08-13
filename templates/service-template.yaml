@@ -1,0 +1,158 @@
+---
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: "DMancipate-service"
+  annotations:
+    openshift.io/display-name: AI sample application
+    description: AI sample application
+    tags: ai,service-delivery,DMancipate
+labels:
+  template: "DMancipate"
+parameters:
+  # Resource Configuration
+  - name: MEMORY_REQUEST
+    description: Memory request for the API pods.
+    value: "512Mi"
+  - name: MEMORY_LIMIT
+    description: Memory limit for the API pods.
+    value: "1Gi"
+  - name: CPU_REQUEST
+    description: CPU request for the API pods.
+    value: "250m"
+  - name: CPU_LIMIT
+    description: CPU limit for the API pods.
+    value: "500m"
+  # LLM Client Configuration
+  - name: LLM_CLIENT_TYPE
+    description: Type of LLM client to use (openai, langchain, llama_stack).
+    value: "langchain"
+  - name: LANGCHAIN_PROVIDER
+    description: LangChain provider to use (openai, ollama).
+    value: "ollama"
+  # Inference Configuration
+  - name: INFERENCE_MODEL_NAME
+    description: Model name to use for inference.
+    value: "mistral-small"
+  - name: INFERENCE_BASE_URL
+    description: Base URL for the inference API endpoint.
+    value: "https://llama-scout-maas-maas.apps.rosa.hcmaii01ue1.a9ro.p3.openshiftapps.com/v1"
+  - name: INFERENCE_TEMPERATURE
+    description: Temperature for response randomness (0.0-1.0).
+    value: "0.7"
+  - name: INFERENCE_MAX_TOKENS
+    description: Maximum number of tokens to generate in response.
+    value: "2048"
+  - name: SUMMARY_PROMPT
+    description: System prompt for the AI assistant.
+    value: "You are a Dungeon Master running a dungeon and dragons module."
+
+objects:
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: "DMancipate"
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: "DMancipate"
+      template:
+        metadata:
+          labels:
+            app: "DMancipate"
+        spec:
+          containers:
+            - name: "DMancipate"
+              # TODO: Change this image for the app created image
+              image: quay.io/jbarea/hcm-ai-sample-app:1.0
+              ports:
+                - containerPort: 8000
+              resources:
+                requests:
+                  memory: ${MEMORY_REQUEST}
+                  cpu: ${CPU_REQUEST}
+                limits:
+                  memory: ${MEMORY_LIMIT}
+                  cpu: ${CPU_LIMIT}
+              env:
+                # LLM Client Configuration
+                - name: LLM_CLIENT_TYPE
+                  value: ${LLM_CLIENT_TYPE}
+                - name: LANGCHAIN_PROVIDER
+                  value: ${LANGCHAIN_PROVIDER}
+                
+                # Inference Configuration
+                - name: INFERENCE_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      key: INFERENCE_API_KEY
+                      
+                      
+                      name: "hcmai-secret"
+                      
+                - name: INFERENCE_MODEL_NAME
+                  value: ${INFERENCE_MODEL_NAME}
+                - name: INFERENCE_BASE_URL
+                  value: ${INFERENCE_BASE_URL}
+                
+                # Optional Configuration (with defaults)
+                - name: INFERENCE_TEMPERATURE
+                  value: ${INFERENCE_TEMPERATURE}
+                - name: INFERENCE_MAX_TOKENS
+                  value: ${INFERENCE_MAX_TOKENS}
+                - name: SUMMARY_PROMPT
+                  value: ${SUMMARY_PROMPT}
+              
+              livenessProbe:
+                httpGet:
+                  path: /health
+                  port: 8000
+                initialDelaySeconds: 30
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 3
+              
+              readinessProbe:
+                httpGet:
+                  path: /health
+                  port: 8000
+                initialDelaySeconds: 5
+                periodSeconds: 5
+                timeoutSeconds: 3
+                failureThreshold: 2
+              
+              imagePullPolicy: Always
+          securityContext:
+            runAsNonRoot: true
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: "DMancipate"
+    spec:
+      selector:
+        app: "DMancipate"
+      ports:
+        - protocol: TCP
+          port: 443
+          targetPort: 8000
+
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: "DMancipate"
+      annotations:
+        haproxy.router.openshift.io/timeout: "1200s"
+    spec:
+      port:
+        targetPort: 8000
+      to:
+        kind: Service
+        name: "DMancipate"
+        weight: 100
+      tls:
+        termination: edge
+      wildcardPolicy: None
+
+
