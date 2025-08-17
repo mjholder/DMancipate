@@ -9,6 +9,9 @@ supporting OpenAI and Ollama providers with configurable parameters.
 import json
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
+from langchain.chains import RetrievalQA, ConversationalRetrievalChain
+from langchain_ollama import OllamaEmbeddings
+from langchain_pinecone import PineconeVectorStore
 from . import config as conf
 
 
@@ -32,6 +35,7 @@ class LangChainClient:
         """
         self.llm = self._initialize_llm()
         self.instructions = conf.SUMMARY_PROMPT
+        self.history = []
 
     def _initialize_llm(self):
         """
@@ -85,7 +89,77 @@ class LangChainClient:
         except ImportError as e:
             raise ValueError(f"Required LangChain package not installed for provider '{provider}': {e}")
 
-    def chat(self, prompt, enable_stream=False):
+    def _get_rules_context(self, user_query):
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url="http://localhost:11434")
+        vectorstore = PineconeVectorStore(index_name="dnd-vector", embedding=embeddings)
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+        docs = retriever.invoke(user_query)
+        print(f"rules context: {docs}")
+        return "\n".join([doc.page_content for doc in docs])
+
+    def _get_monster_context(self, user_query):
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url="http://localhost:11434")
+        vectorstore = PineconeVectorStore(index_name="monster-vector", embedding=embeddings)
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
+        docs = retriever.invoke(user_query)
+        print(f"monster context: {docs}")
+        return "\n".join([doc.page_content for doc in docs])
+
+    def _get_campaign_context(self, user_query):
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url="http://localhost:11434")
+        history_vectorstore = PineconeVectorStore(index_name="campaign-history", embedding=embeddings)
+        retriever = history_vectorstore.as_retriever(search_kwargs={"k": 2})
+        history_docs = retriever.invoke(user_query)
+        print(f"campaign history: {history_docs}")
+        return "\n".join([doc.page_content for doc in history_docs])
+    def _get_campaign_modules_context(self, user_query):
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url="http://localhost:11434")
+        module_vectorstore = PineconeVectorStore(index_name="campaign-modules", namespace="HoardDragonQueen", embedding=embeddings)
+        module_retriever = module_vectorstore.as_retriever(search_kwargs={"k": 2})
+        module_docs = module_retriever.invoke(user_query)
+        print(f"campaign modules: {module_docs}")
+        return "\n".join([doc.page_content for doc in module_docs])
+
+
+    def _update_campaign_vector_store(self, response):
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url="http://localhost:11434")
+        vectorstore = PineconeVectorStore(index_name="campaign-history", embedding=embeddings)
+        print(f"updating campaign history: {response}")
+        vectorstore.add_texts([response])
+
+    def _get_contexts(self, action, prompt):
+        contexts = [self._get_campaign_context(prompt)]
+        action_prompt = ""
+        if action == "ask":
+            action_prompt = "The player is asking you the DM a question. The context you are given is for your eyes only. You should not reveal this information to the player directly. If you see something like 1d4 or 1d6, that means you need to determine what the number is. Don't tell the player. If the action requires a skill check tell the player to do that check before allowing the action to continue."
+            contexts.append(self._get_campaign_modules_context(prompt))
+        if action == "talk":
+            action_prompt = "The player is talking to an NPC. Determine the NPC's personality and provide a concise answer but only reveal information if the player asks for it directly. If the user is required to pass a deception or persuasion check, tell the player to do that check before allowing the action to continue."
+            contexts.append(self._get_campaign_modules_context(prompt))
+        elif action == "attack":
+            action_prompt = "The player is attacking a monster. Provide a concise answer but only reveal information that is relevant to the player's attack. Before allowing the attack to happen, make sure the player specifies their attack roll and make sure it is greater than or equal to the monsters AC. If the attack is successful, provide a concise answer on what happens as a result of the attack."
+            contexts.append(self._get_monster_context(prompt))
+        elif action == "skill_check":
+            action_prompt = "The player is performing a skill check. Provide a concise, one or two sentence answer on what the player should do to achieve the goal of the skill check. Include the revelant modifiers the player needs to add to the roll for the skill check. This should be as simple as 'Roll a Stealth check and add your wisdom modifier'"
+            contexts.append(self._get_rules_context(prompt))
+        elif action == "use_skill":
+            action_prompt = "The player is using a skill. Provide a concise response to what happens as a result of the skill being used. A key part of determining the outcome is the roll number associated with the skill. Check for a difficulty number and compare it to the roll number. If the roll number is higher than or equal to the difficulty number, the skill was successful. If the roll number is lower than the difficulty number, the skill was not successful."
+            contexts.append(self._get_campaign_modules_context(prompt))
+        elif action == "use_item":
+            action_prompt = "The player is using an item. Provide a concise answer but only reveal information that is relevant to the player's item use. If the item requires a skill check, tell the player to do that check before allowing the action to continue."
+            contexts.append(self._get_rules_context(prompt))
+        elif action == "look":
+            action_prompt = "The player is looking around. Provide a concise description on what the player is looking at. It should only be a few sentences."
+            contexts.append(self._get_campaign_modules_context(prompt))
+        elif action == "pick_up":
+            action_prompt = "The player is picking up an item. Provide a concise one sentence response the player picking up the item."
+            contexts.append(self._get_campaign_modules_context(prompt))
+        elif action == "review":
+            action_prompt = "The player is reviewing the campaign history. Provide a concise summary of the campaign history."
+        return "\n".join(contexts), action_prompt
+
+
+    def chat(self, prompt, enable_stream=False, action=None):
         """
         Send a chat message to the LLM using LangChain.
         
@@ -105,16 +179,31 @@ class LangChainClient:
         Raises:
             Exception: If LLM request fails or configuration is invalid
         """
-        messages = [
-            SystemMessage(content=self.instructions),
-            HumanMessage(content=prompt)
-        ]
-        
+
+        contexts, action_prompt = self._get_contexts(action, prompt)
+        quest_context = self._get_campaign_context(prompt)
+        user_query = f"""
+        {self.instructions}
+        Here is what the player wants to do:
+        {prompt}
+        Only provide information that is mentioned in the following context. If it's not in that context then the player would not know about it:
+        {quest_context}
+
+        {action_prompt}
+        The following are relevant information to the player's action or question.
+        {contexts}
+        """
+        print(user_query)
         try:
             if enable_stream:
-                return self.llm.stream(messages)
+                response = self.llm.stream(user_query)
             else:
-                return self.llm.invoke(messages)
+                response = self.llm.invoke(user_query)
+
+            self.history.append((prompt, response.content))
+            if action != "review":
+                self._update_campaign_vector_store(response.content)
+            return response
         except Exception as e:
             print(f"Error creating LangChain chat completion: {e}")
             raise
@@ -139,6 +228,20 @@ class LangChainClient:
                 if hasattr(chunk, 'content') and chunk.content:
                     event_data = {"content": chunk.content}
                     yield f"{json.dumps(event_data)}\n"
+                elif isinstance(chunk, dict):
+                    text = (
+                        chunk.get("answer")
+                        or chunk.get("content")
+                        or chunk.get("result")
+                        or chunk.get("output_text")
+                        or ""
+                    )
+                    if text:
+                        event_data = {"content": text}
+                        yield f"{json.dumps(event_data)}\n"
+                elif isinstance(chunk, str) and chunk:
+                    event_data = {"content": chunk}
+                    yield f"{json.dumps(event_data)}\n"
         except Exception as e:
             fallback_data = {
                 "content": "",
@@ -162,5 +265,11 @@ class LangChainClient:
         """
         if hasattr(response, 'content'):
             return response.content
-        else:
-            return str(response)
+        if isinstance(response, dict):
+            if isinstance(response.get("answer"), str):
+                return response["answer"]
+            if isinstance(response.get("result"), str):
+                return response["result"]
+            if isinstance(response.get("output_text"), str):
+                return response["output_text"]
+        return str(response)

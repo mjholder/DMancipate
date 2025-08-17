@@ -20,9 +20,18 @@ dependencies = [
   "langchain-core",
   "langchain-openai",
   "langchain-ollama",
+  "pinecone>=7.3.0",
+  "langchain-community>=0.3.27",
+  "graphviz>=0.21",
 ]
 
+[project.scripts]
+dmancipate = "dmancipate_cli.cli:main"
+
 [project.optional-dependencies]
+cli = [
+  "requests",
+]
 dev = [
   "ipython",
   "pytest",
@@ -34,6 +43,10 @@ dev = [
 
 [tool.setuptools]
 include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["DMancipate*", "dmancipate_cli*"]
 
 [tool.ruff]
 line-length = 100

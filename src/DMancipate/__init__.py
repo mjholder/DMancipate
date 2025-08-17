@@ -53,7 +53,7 @@ def _initialize_routes(api: Api):
         POST /chat: Chat completion endpoint for LLM interactions
     """
     api.add_resource(HealthCheckApi, "/health", methods=["GET"])
-    api.add_resource(ChatApi, "/chat", methods=["POST"])
+    api.add_resource(ChatApi, "/chat", methods=["POST", "DELETE"])
 
 
 # Global app instance for direct import - supports various deployment scenarios

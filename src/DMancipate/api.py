@@ -6,9 +6,11 @@ chat functionality with LLM providers, supporting both streaming
 and non-streaming responses.
 """
 
+import os
 from .llm.llm_client import llm
 from flask import request, jsonify, Response, stream_with_context
 from flask_restful import Resource
+from pinecone import Pinecone
 
 
 class HealthCheckApi(Resource):
@@ -39,6 +41,8 @@ class ChatApi(Resource):
     Handles chat requests with support for both streaming and non-streaming
     responses across different LLM providers (OpenAI, LangChain, Llama Stack).
     """
+    def __init__(self):
+        self.allowed_actions = ["talk", "attack", "skill_check", "use_item", "look", "pick_up", "ask", "review", "use_skill"]
 
     def post(self):
         """
@@ -51,7 +55,8 @@ class ChatApi(Resource):
         Request JSON format:
             {
                 "prompt": "User message to send to the LLM",
-                "enable_stream": "True" or "False" (string, case-insensitive)
+                "enable_stream": "True" or "False" (string, case-insensitive),
+                "action": "talk", "attack", "skill_check", "use_item", "look", "pick_up" (string, case-insensitive)
             }
         
         Returns:
@@ -66,12 +71,12 @@ class ChatApi(Resource):
                 JSON: {"error": "error_description"} with appropriate HTTP status
         """
         try:
-            prompt, enable_stream = self._parse_parameters()
+            prompt, enable_stream, action = self._parse_parameters()
         except ValueError as e:
             return {"error": str(e)}, 400
 
         try:
-            response = llm.client.chat(prompt, enable_stream)
+            response = llm.client.chat(prompt, enable_stream, action)
 
             if enable_stream:
                 return Response(stream_with_context(llm.client.streaming_response(response)), mimetype="application/json")
@@ -80,6 +85,34 @@ class ChatApi(Resource):
                 return jsonify({"result": content})
         except Exception as e:
             return {"error": str(e)}, 500
+
+    def delete(self):
+        """
+        Reset campaign history by deleting all documents from the campaign-history index.
+        
+        This endpoint removes all game history stored in the Pinecone "campaign-history" 
+        index, effectively resetting the campaign to a fresh state.
+        
+        Returns:
+            JSON: {"message": "Campaign history reset successfully"} on success
+            JSON: {"error": "error_description"} with appropriate HTTP status on error
+        """
+        try:
+            # Initialize Pinecone client
+            api_key = os.getenv("PINECONE_API_KEY")
+            if not api_key:
+                return {"error": "Pinecone API key not configured"}, 500
+            
+            pc = Pinecone(api_key=api_key)
+            index = pc.Index("campaign-history")
+            
+            # Delete all documents from the campaign-history index
+            index.delete(delete_all=True)
+            
+            return {"message": "Campaign history reset successfully"}, 200
+            
+        except Exception as e:
+            return {"error": f"Failed to reset campaign history: {str(e)}"}, 500
 
     def _parse_parameters(self):
         """
@@ -103,13 +136,16 @@ class ChatApi(Resource):
 
         prompt = data.get("prompt")
         enable_stream = data.get("enable_stream", "False")
+        action = data.get("action")
 
+        if action not in self.allowed_actions:
+            raise ValueError (f"Invalid action: {action}")
         if enable_stream not in ("True", "False", "true", "false"):
             raise ValueError (f"Invalid boolean value for 'enable_stream': {enable_stream}")
         if prompt is None:
             raise ValueError ("Missing 'prompt' parameter")
 
-        return prompt, self._parse_bool(enable_stream)
+        return prompt, self._parse_bool(enable_stream), action
 
     def _parse_bool(self, value):
         """
