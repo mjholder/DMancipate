@@ -1,6 +1,6 @@
-# HCM AI Sample App
+# DMancipate - AI Dungeon Master
 
-A Flask application that provides a unified API interface for different LLM providers through a simplified client architecture.
+A Flask application that provides a unified API interface for different LLM providers through a simplified client architecture. Includes a lightweight, independent CLI client for easy interaction.
 
 ## ✨ Features
 
@@ -8,6 +8,7 @@ A Flask application that provides a unified API interface for different LLM prov
 - **Unified Configuration**: Single set of environment variables for all providers
 - **LangChain Integration**: Access to multiple providers through LangChain unified interface  
 - **Streaming Support**: Real-time response streaming for all providers
+- **Independent CLI Client**: Lightweight command-line interface separate from server code
 
 ## 🚀 Quick Start
 
@@ -267,6 +268,89 @@ curl -X POST https://$(oc get route DMancipate -o jsonpath='{.spec.host}')/chat 
   -d '{"prompt": "Hello, how are you?", "enable_stream": "False"}'
 ```
 
+## 💻 CLI Interface
+
+DMancipate includes a lightweight command-line interface for easy interaction with your DM chatbot. The CLI is completely separate from the server code and only requires basic HTTP client dependencies.
+
+### Installation
+
+The CLI is available as an optional component. You can install it along with the main package:
+
+```bash
+# Install the main package with CLI support
+uv pip install -e ".[cli]"
+
+# Or install everything for development
+uv pip install -e ".[cli,dev]"
+```
+
+**Note**: The CLI (`dmancipate_cli`) is independent of the main DMancipate server package and only requires `requests` for HTTP communication.
+
+### Usage
+
+```bash
+dmancipate <action> <prompt> [options]
+```
+
+**Available Actions:**
+- `talk` - General conversation with the DM
+- `attack` - Describe an attack action
+- `skill_check` - Request a skill check
+- `use_item` - Use an item from inventory
+- `look` - Examine surroundings or objects
+- `pick_up` - Pick up items
+- `ask` - Ask the DM questions about rules/stats
+- `reset` - Delete all campaign history (no prompt required)
+
+**Options:**
+- `--host` - API server host (default: localhost)
+- `--port` - API server port (default: 5000)
+- `--check-health` - Check if API server is running
+
+### Examples
+
+```bash
+# Start a conversation with the DM
+dmancipate talk "Hello DM, I'm a level 1 rogue entering a tavern"
+
+# Make an attack
+dmancipate attack "I swing my short sword at the goblin"
+
+# Make a skill check
+dmancipate skill_check "I try to pick the lock on the treasure chest"
+
+# Look around
+dmancipate look "I examine the mysterious door for traps"
+
+# Ask about game mechanics
+dmancipate ask "What are the stats for a goblin warrior?"
+
+# Use an item
+dmancipate use_item "I drink a healing potion"
+
+# Pick up items
+dmancipate pick_up "I take the gold coins from the table"
+
+# Reset campaign history (deletes all game history)
+dmancipate reset
+
+# Check if the API server is running
+dmancipate talk "test" --check-health
+
+# Connect to a remote server
+dmancipate talk "Hello" --host api.mydmserver.com --port 8080
+```
+
+### Prerequisites
+
+The CLI requires the DMancipate API server to be running. Start the server first:
+
+```bash
+flask run
+```
+
+Then use the CLI from another terminal to interact with your DM chatbot.
+
 ## 📡 API Endpoints
 
 ### Health Check
@@ -285,6 +369,21 @@ curl http://localhost:5000/health
 ```
 
 ### Chat API
+
+#### Reset Campaign History
+
+Delete all campaign history from the game:
+
+```bash
+curl -X DELETE http://localhost:5000/chat
+```
+
+**Response:**
+```json
+{
+  "message": "Campaign history reset successfully"
+}
+```
 
 #### Non-Streaming Chat
 
@@ -329,10 +428,39 @@ curl -X POST http://localhost:5000/chat \
 
 ### Request Parameters
 
+#### For Chat Requests (POST /chat)
+
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `prompt` | string | Yes | The message to send to the LLM |
 | `enable_stream` | string | Yes | `"True"` for streaming, `"False"` for complete response |
+| `action` | string | Yes | Action type: "talk", "attack", "skill_check", "use_item", "look", "pick_up", "ask" |
+
+#### For Reset Requests (DELETE /chat)
+
+No parameters required. This endpoint deletes all documents from the "campaign-history" index.
+
+## 📁 Project Structure
+
+The project is organized into two independent components:
+
+```
+src/
+├── DMancipate/           # Main API server package
+│   ├── api.py           # Flask REST API endpoints
+│   ├── llm/             # LLM client implementations
+│   ├── assets/          # D&D reference materials
+│   └── ingestion.py     # Document processing
+└── dmancipate_cli/      # Independent CLI client package  
+    ├── __init__.py      # CLI package metadata
+    └── cli.py           # Command-line interface implementation
+```
+
+**Key Separation Benefits:**
+- 🔗 **Independent**: CLI doesn't import or depend on server code
+- 🪶 **Lightweight**: CLI only requires `requests` (no Flask, LLM libraries, etc.)
+- 🚀 **Deployable**: Server and CLI can be deployed/distributed separately
+- 🔧 **Maintainable**: Clear separation of client and server concerns
 
 ## 🛠️ Architecture
 
