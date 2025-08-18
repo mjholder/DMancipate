@@ -42,7 +42,7 @@ class ChatApi(Resource):
     responses across different LLM providers (OpenAI, LangChain, Llama Stack).
     """
     def __init__(self):
-        self.allowed_actions = ["talk", "attack", "skill_check", "use_item", "look", "pick_up", "ask", "review", "use_skill"]
+        self.allowed_actions = ["talk", "attack", "skill_check", "use_item", "look", "pick_up", "ask", "review", "use_skill", "start"]
 
     def post(self):
         """
@@ -142,7 +142,7 @@ class ChatApi(Resource):
             raise ValueError (f"Invalid action: {action}")
         if enable_stream not in ("True", "False", "true", "false"):
             raise ValueError (f"Invalid boolean value for 'enable_stream': {enable_stream}")
-        if prompt is None:
+        if prompt is None and action != "start" and action != "reset":
             raise ValueError ("Missing 'prompt' parameter")
 
         return prompt, self._parse_bool(enable_stream), action

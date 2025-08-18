@@ -20,7 +20,7 @@ from typing import Optional
 class DMancipateCLI:
     """CLI client for DMancipate DM chatbot."""
     
-    ALLOWED_ACTIONS = ["talk", "attack", "skill_check", "use_item", "look", "pick_up", "ask", "reset", "review", "use_skill"]
+    ALLOWED_ACTIONS = ["talk", "attack", "skill_check", "use_item", "look", "pick_up", "ask", "reset", "review", "use_skill", "start"]
     DEFAULT_HOST = "localhost"
     DEFAULT_PORT = 5000
     
@@ -56,8 +56,7 @@ class DMancipateCLI:
             response = requests.post(
                 f"{self.base_url}/chat",
                 json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=600  # 10 minute timeout
+                headers={"Content-Type": "application/json"}
             )
             
             if response.status_code == 200:
@@ -150,7 +149,7 @@ Examples:
   dmancipate ask "What are the stats for a goblin?"
   dmancipate reset  # Deletes all campaign history
 
-Available actions: talk, attack, skill_check, use_item, look, pick_up, ask, reset, review, use_skill
+Available actions: talk, attack, skill_check, use_item, look, pick_up, ask, reset, review, use_skill, start
         """
     )
     
@@ -162,7 +161,7 @@ Available actions: talk, attack, skill_check, use_item, look, pick_up, ask, rese
     
     parser.add_argument(
         "prompt",
-        nargs="?" if "reset" in sys.argv else None,
+        nargs="?" if "reset" in sys.argv or "start" in sys.argv else None,
         help="The message/prompt to send to the DM (not required for reset action)"
     )
     
@@ -216,7 +215,7 @@ Available actions: talk, attack, skill_check, use_item, look, pick_up, ask, rese
             sys.exit(1)
     else:
         # Validate that prompt is provided for non-reset actions
-        if not args.prompt:
+        if not args.prompt and args.action != "start" and args.action != "reset":
             print("Error: Prompt is required for this action.")
             print("Use 'dmancipate --help' for usage information.")
             sys.exit(1)
