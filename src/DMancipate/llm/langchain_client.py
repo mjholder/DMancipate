@@ -118,7 +118,7 @@ class LangChainClient:
     def _get_campaign_context(self, user_query):
         embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url="http://localhost:11434")
         history_vectorstore = PineconeVectorStore(index_name="campaign-history", embedding=embeddings)
-        retriever = history_vectorstore.as_retriever(search_kwargs={"k": 10})
+        retriever = history_vectorstore.as_retriever(search_kwargs={"k": 5})
         history_docs = retriever.invoke(user_query)
         print(f"campaign history: {history_docs}")
         if len(history_docs) == 0:
@@ -232,7 +232,7 @@ class LangChainClient:
             action_prompt = "The player is attacking a monster. Provide a concise answer but only reveal information that is relevant to the player's attack. Before allowing the attack to happen, make sure the player specifies their attack roll and make sure it is greater than or equal to the monsters AC. If the attack is successful, provide a concise answer on what happens as a result of the attack."
             contexts.append({"prompt": action_prompt, "context": self._get_monster_context(prompt)})
         elif action == "skill_check":
-            action_prompt = "The player is performing a skill check. Provide a concise, one or two sentence answer on what the player should do to achieve the goal of the skill check. Include the revelant modifiers the player needs to add to the roll for the skill check. This should be as simple as 'Roll a Stealth check and add your wisdom modifier'"
+            action_prompt = "The player is performing a skill check. Provide a concise, one or two sentence answer on what the player should do to achieve the goal of the skill check. Include the revelant modifiers the player needs to add to the roll for the skill check."
             contexts.append({"prompt": action_prompt, "context": self._get_rules_context(prompt)})
         elif action == "use_skill":
             action_prompt = "The player is using a skill. Provide a concise response to what happens as a result of the skill being used. A key part of determining the outcome is the roll number associated with the skill. Check for a difficulty number and compare it to the roll number. If the roll number is higher than or equal to the difficulty number, the skill was successful. If the roll number is lower than the difficulty number, the skill was not successful."
